@@ -1,16 +1,23 @@
 from typing import Annotated
 import asyncio
-import time
 import json
-from fastapi import FastAPI, Body, Path, Header, HTTPException, status, Depends
+import time
+
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Path, Request, status
 from fastapi.responses import StreamingResponse
-from schemas import ChatResponse, SqlResponse, ClarifyResponse
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.schemas import ChatResponse
+from app.db.redis import ping_redis
+from app.db.mysql import mysql_ping
+from app.db.deps import get_mysql_session
 
 
-app = FastAPI(title="FastAPI 2026")
+router = APIRouter()
 
 
-@app.get("/hello")
+@router.get("/hello")
 async def hello(name: str = "World"):
     return {"message": f"Hello {name}"}
 
@@ -22,14 +29,14 @@ async def verify_admin(x_admin_key: Annotated[str, Header()]):
     return x_admin_key
 
 
-@app.get("/admin-data")
+@router.get("/admin-data")
 # 只有带了正确 Header 的请求才能进入这个函数
 async def get_admin_data(admin_key: Annotated[str, Depends(verify_admin)]):
     """依赖注入。它可以让你把“检查登录状态”、“获取数据库连接”等通用逻辑抽离出来，像插件一样插在任何接口上。"""
     return {"data": "敏感数据"}
 
 
-@app.get("/student/{student_id}")
+@router.get("/student/{student_id}")
 async def get_student_info(
     # 1. 路径参数：使用 Path()，可以添加描述和校验（如 ID 必须大于 0）
     student_id: Annotated[int, Path(title="学生ID", gt=0)],
@@ -54,7 +61,7 @@ async def get_student_info(
     }
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 async def handle_chat(response: Annotated[ChatResponse, Body()]):
     # 这里会自动根据 type (sql/clarify/block) 进行校验和分发
     return response
@@ -79,7 +86,7 @@ async def mock_llm_generator():
         await asyncio.sleep(0.05)
 
 
-@app.get("/stream")
+@router.get("/stream")
 async def chat_stream():
     # 使用 StreamingResponse 返回生成器
     return StreamingResponse(mock_llm_generator(), media_type="text/event-stream")
@@ -113,7 +120,7 @@ async def long_text_generator():
     yield f"data: {json.dumps(d)}\n\n"
 
 
-@app.get("/stream-llm")
+@router.get("/stream-llm")
 async def stream_text():
     return StreamingResponse(
         long_text_generator(),
@@ -122,8 +129,15 @@ async def stream_text():
     )
 
 
-if __name__ == "__main__":
-    import uvicorn
+def get_redis(request: Request) -> Redis:
+    return request.app.state.redis
 
-    # 启动main.py中的app实例
-    uvicorn.run("main:app", host="0.0.0.0", port=9090, reload=True)
+
+@router.get("/redis/ping")
+async def redis_health(redis: Annotated[Redis, Depends(get_redis)]):
+    return {"redis": await ping_redis(redis)}
+
+
+@router.get("/mysql/ping")
+async def mysql_health(session: Annotated[AsyncSession, Depends(get_mysql_session)]):
+    return {"mysql": await mysql_ping(session)}
