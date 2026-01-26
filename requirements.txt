@@ -6,3 +6,4 @@ pydantic-settings>=2.2.1
 SQLAlchemy>=2.0.36
 asyncmy>=0.2.9
 greenlet>=3.0.3
+loguru>=0.7.2

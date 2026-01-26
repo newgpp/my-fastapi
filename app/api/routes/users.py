@@ -1,12 +1,26 @@
+import json
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas import UserCreate, UserOut, UserPage, UserUpdate
-from app.db.deps import get_mysql_session
+from app.db.deps import get_current_user_from_token, get_mysql_session, get_redis
 from app.services import user_service
 
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+class LoginPayload(BaseModel):
+    token: str
+    user: dict[str, Any]
+
+
+class LogoutPayload(BaseModel):
+    token: str
 
 
 @router.post("", response_model=UserOut)
@@ -66,9 +80,30 @@ async def update_user(
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
+    _current_user: dict = Depends(get_current_user_from_token),
     session: AsyncSession = Depends(get_mysql_session),
-):
+):  
+    
     ok = await user_service.delete_user(session, user_id)
     if not ok:
         raise HTTPException(status_code=404, detail="用户不存在")
     return {"deleted": True, "id": user_id}
+
+
+@router.post("/login")
+async def login(
+    payload: LoginPayload,
+    redis: Redis = Depends(get_redis),
+):
+    user_json = json.dumps(payload.user, ensure_ascii=False)
+    await redis.set(f"login:token:{payload.token}", user_json)
+    return {"token": payload.token, "stored": True}
+
+
+@router.post("/logout")
+async def logout(
+    payload: LogoutPayload,
+    redis: Redis = Depends(get_redis),
+):
+    await redis.delete(f"login:token:{payload.token}")
+    return {"token": payload.token, "deleted": True}

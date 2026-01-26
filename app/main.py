@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
+import sys
 
 from fastapi import FastAPI
+from loguru import logger
 
 from app.api.router import api_router
 from app.core.config import get_settings
@@ -10,6 +12,14 @@ from app.db.mysql import (
     create_session_factory,
 )
 from app.db.redis import close_redis, create_redis
+
+
+logger.remove()
+logger.add(
+    sys.stdout,
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss,SSS} {level} {name} {message}",
+)
 
 
 @asynccontextmanager
@@ -32,4 +42,10 @@ app.include_router(api_router)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("app.main:app", host="0.0.0.0", port=9090, reload=True)
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=9090,
+        reload=True,
+    )
+
