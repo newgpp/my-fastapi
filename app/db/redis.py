@@ -10,6 +10,8 @@ async def create_redis() -> Redis:
         settings.redis_url,
         password=settings.redis_password,
         decode_responses=True,
+        max_connections=50,
+        health_check_interval=30,
     )
 
 
