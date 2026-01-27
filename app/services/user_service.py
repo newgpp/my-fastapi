@@ -105,7 +105,6 @@ async def update_user(
     user = await user_repo.update_user(session, user)
     return _to_schema(user)
 
-
 async def delete_user(session: AsyncSession, user_id: int) -> bool:
     # 1. 先查出对象
     user = await user_repo.get_user_by_id(session, user_id)
@@ -125,5 +124,4 @@ async def delete_user(session: AsyncSession, user_id: int) -> bool:
         return True
     except Exception:
         await session.rollback() # 发生异常务必回滚
-        return False
-
+        raise
