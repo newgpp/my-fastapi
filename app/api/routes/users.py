@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -23,31 +23,34 @@ class LogoutPayload(BaseModel):
     token: str
 
 
+SessionDept =  Annotated[AsyncSession, Depends(get_mysql_session)]
+
+
 @router.post("", response_model=UserOut)
 async def create_user(
     payload: UserCreate,
-    session: AsyncSession = Depends(get_mysql_session),
+    session: SessionDept,
 ):
     return await user_service.create_user(session, payload)
 
 
 @router.get("", response_model=UserPage)
 async def list_users(
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    session: AsyncSession = Depends(get_mysql_session),
+    session: SessionDept,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=1000)] = 10,
 ):
     return await user_service.list_users(session, page, size)
 
 
 @router.get("/raw", response_model=UserPage)
 async def list_users_raw(
-    page: int = Query(1, ge=1),
-    size: int = Query(10, ge=1, le=100),
-    username: str | None = Query(None),
-    age_min: int | None = Query(None, ge=0),
-    age_max: int | None = Query(None, ge=0),
-    session: AsyncSession = Depends(get_mysql_session),
+    session: SessionDept,
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 10,
+    username: Annotated[str | None, Query()] = None,
+    age_min: Annotated[int | None, Query(ge=0)] = None,
+    age_max: Annotated[int | None, Query(ge=0)] = None,
 ):
     return await user_service.list_users_raw(
         session, page, size, username, age_min, age_max
@@ -57,7 +60,7 @@ async def list_users_raw(
 @router.get("/{user_id}", response_model=UserOut)
 async def get_user(
     user_id: int,
-    session: AsyncSession = Depends(get_mysql_session),
+    session: SessionDept,
 ):
     user = await user_service.get_user(session, user_id)
     if user is None:
@@ -69,7 +72,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     payload: UserUpdate,
-    session: AsyncSession = Depends(get_mysql_session),
+    session: SessionDept,
 ):
     user = await user_service.update_user(session, user_id, payload)
     if user is None:
@@ -80,8 +83,8 @@ async def update_user(
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
-    _current_user: dict = Depends(get_current_user_from_token),
-    session: AsyncSession = Depends(get_mysql_session),
+    _current_user: Annotated[dict, Depends(get_current_user_from_token)],
+    session: SessionDept,
 ):  
     
     ok = await user_service.delete_user(session, user_id)
@@ -93,7 +96,7 @@ async def delete_user(
 @router.post("/login")
 async def login(
     payload: LoginPayload,
-    redis: Redis = Depends(get_redis),
+    redis: Annotated[Redis, Depends(get_redis)],
 ):
     user_json = json.dumps(payload.user, ensure_ascii=False)
     await redis.set(f"login:token:{payload.token}", user_json)
@@ -103,7 +106,7 @@ async def login(
 @router.post("/logout")
 async def logout(
     payload: LogoutPayload,
-    redis: Redis = Depends(get_redis),
+    redis: Annotated[Redis, Depends(get_redis)],
 ):
     await redis.delete(f"login:token:{payload.token}")
     return {"token": payload.token, "deleted": True}

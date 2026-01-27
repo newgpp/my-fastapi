@@ -1,6 +1,6 @@
 from collections.abc import AsyncGenerator
 import json
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, Security
 from fastapi.logger import logger
@@ -24,8 +24,8 @@ api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
 
 async def get_current_user_from_token(
-    token: str | None = Security(api_key_header),
-    redis: Redis = Depends(get_redis),
+    redis: Annotated[Redis, Depends(get_redis)],
+    token: Annotated[str | None, Security(api_key_header)],
 ) -> dict[str, Any]:
     if token is None:
         raise HTTPException(status_code=401, detail="未登录或令牌无效")
