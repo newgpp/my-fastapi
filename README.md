@@ -1,6 +1,21 @@
 # my-fastapi
 Learn The FastAPI
 
+### 项目依赖
+
+```css
+main.py
+  ↓
+routers/
+  ↓
+services/
+  ├───────────────┬───────────────┐
+  ↓               ↓               ↓
+repos/           core/           utils/
+  ↓
+ db/
+```
+
 ### Event Loop
 
 ```mermaid

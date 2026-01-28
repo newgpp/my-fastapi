@@ -5,7 +5,7 @@ import textwrap
 from app.core.concurrency import limited
 
 
-async def attention_chat() -> AsyncGenerator:
+async def attention_chat() -> AsyncGenerator[str, None]:
     attention = textwrap.dedent("""
         《Attention Is All You Need》中文介绍
 
