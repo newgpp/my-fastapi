@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import sys
 
@@ -6,6 +7,7 @@ from loguru import logger
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.concurrency import limited
 from app.db.mysql import (
     close_mysql_engine,
     create_mysql_engine,
@@ -27,6 +29,10 @@ async def lifespan(app: FastAPI):
     app.state.redis = await create_redis()
     app.state.mysql_engine = create_mysql_engine()
     app.state.mysql_session_factory = create_session_factory(app.state.mysql_engine)
+    app.state.llm_sem = asyncio.Semaphore(2)
+    app.state.http_sem = asyncio.Semaphore(32)
+    app.state.mysql_sem = asyncio.Semaphore(16)
+    app.state.redis_sem = asyncio.Semaphore(64)
     try:
         yield
     finally:
@@ -48,4 +54,3 @@ if __name__ == "__main__":
         port=9090,
         reload=True,
     )
-
