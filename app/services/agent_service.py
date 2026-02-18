@@ -31,9 +31,12 @@ async def attention_chat() -> AsyncGenerator[str, None]:
         GPT、BERT、T5 等大模型的基础架构。《Attention Is All You Need》因此被普遍
         认为是现代大模型时代的起点，对整个 AI 领域产生了深远而持续的影响。
         """).strip()
-    for t in attention:
-        yield t
-        await asyncio.sleep(0.03)
+    try:
+        for t in attention:
+            yield t
+            await asyncio.sleep(0.03)
+    finally:
+        print("generator cleaned")
 
 
 async def llm_stream(sem: asyncio.Semaphore) -> AsyncGenerator[str, None]:

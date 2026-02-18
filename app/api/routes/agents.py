@@ -1,3 +1,5 @@
+import asyncio
+from asyncio import CancelledError
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
@@ -8,28 +10,40 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 async def _stream_with_disconnect(request: Request, generator):
-    """断线检测+资源清理"""
-    """break作用 切断“上游 generator → 下游消费者”的数据拉动链"""
-    """要不要手动清理 generator，取决于 generator 是不是“持有资源”的异步生成器"""
+    """安全的 streaming 包装器：
+    - 依赖 ASGI 的取消机制停止流
+    - 只做资源清理，不做生命周期控制
+    """
+
+    client = getattr(request.client, "host", "unknown")
     normal_end = False
+
     try:
         async for chunk in generator:
-            if await request.is_disconnected():
-                logger.warning(f"{request.client.host} disconnected")
-                break
+            # 仅用于日志提示，不再控制流程
             yield chunk
-        else:
-            normal_end = True
+
+        normal_end = True
+
+    except CancelledError:
+        # 关键：客户端断开时会走这里
+        logger.warning(f"{client} disconnected (cancelled)")
+        raise  # 必须继续向上抛，让 ASGI 停止整个调用链
+
     finally:
-        try:
-            aclose = getattr(generator, "aclose", None)
-            if aclose:
-                await aclose()
-        finally:
-            if normal_end:
-                logger.info(f"{request.client.host} completed")
-            else:
-                logger.warning(f"{request.client.host} aborted")
+        # 只负责关闭上游资源，不阻断取消
+        aclose = getattr(generator, "aclose", None)
+        if aclose:
+            try:
+                # 使用 shield 确保即使外层取消了，close 逻辑也能跑完
+                await asyncio.wait_for(asyncio.shield(aclose()), timeout=5.0)
+            except Exception:
+                logger.exception("generator close failed")
+
+        if normal_end:
+            logger.info(f"{client} completed")
+        else:
+            logger.warning(f"{client} aborted")
 
 
 @router.get("/llm")
